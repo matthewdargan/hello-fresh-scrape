@@ -6,9 +6,11 @@
 //
 // Usage:
 //
-//	hello-fresh-scrape [-o output]
+//	hello-fresh-scrape [-o output] [-y]
 //
 // The -o flag specifies the name of a file to write instead of using standard output.
+//
+// The -y flag converts recipe IngredientYield IDs to names.
 package main // import "github.com/matthewdargan/hello-fresh-scrape"
 
 import (
@@ -23,12 +25,13 @@ import (
 )
 
 var (
-	oFlag  = flag.String("o", "", "write output to `file` (default standard output)")
-	output *bufio.Writer
+	oFlag           = flag.String("o", "", "write output to `file` (default standard output)")
+	yieldIDsToNames = flag.Bool("y", false, "convert recipe IngredientYield IDs to names")
+	output          *bufio.Writer
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: hello-fresh-scrape [-o output]\n")
+	fmt.Fprintf(os.Stderr, "usage: hello-fresh-scrape [-o output] [-y]\n")
 	flag.PrintDefaults()
 	os.Exit(2)
 }
@@ -50,6 +53,12 @@ func main() {
 	rs, err := recipe.ScrapeRecipes()
 	if err != nil {
 		log.Fatal(err)
+	}
+	if *yieldIDsToNames {
+		err = rs.YieldIDsToNames()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	d, err := json.MarshalIndent(rs, "", "\t")
 	if err != nil {

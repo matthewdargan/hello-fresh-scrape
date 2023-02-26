@@ -8,6 +8,7 @@ package recipe
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -67,6 +68,8 @@ type Recipe struct {
 	Cuisines            []Cuisine
 	Yields              []Yield
 }
+
+type Recipes []Recipe
 
 type Category struct {
 	ID       string
@@ -172,7 +175,9 @@ type IngredientYield struct {
 	Unit   string
 }
 
-func ScrapeRecipes() ([]Recipe, error) {
+// ScrapeRecipes scrapes recipes from the JSON payload on the
+// Hello Fresh website.
+func ScrapeRecipes() (Recipes, error) {
 	resp, err := http.Get("https://www.hellofresh.com/recipes")
 	if err != nil {
 		return nil, err
@@ -187,7 +192,7 @@ func ScrapeRecipes() ([]Recipe, error) {
 	if err != nil {
 		return nil, err
 	}
-	var recipes []Recipe
+	var rs Recipes
 	for _, q := range p.Props.PageProps.SSRPayload.DehydratedState.Queries {
 		// Recipes only occur when Data is a JSON object
 		if q.State.Data[0] == '{' {
@@ -197,11 +202,11 @@ func ScrapeRecipes() ([]Recipe, error) {
 				return nil, err
 			}
 			if len(d.Items) > 0 {
-				recipes = append(recipes, d.Items...)
+				rs = append(rs, d.Items...)
 			}
 		}
 	}
-	return recipes, nil
+	return rs, nil
 }
 
 func parseRecipeProps(r io.Reader) ([]byte, error) {
@@ -230,4 +235,30 @@ func parseRecipeProps(r io.Reader) ([]byte, error) {
 		}
 	}
 	return nil, errors.New("recipe props data not found")
+}
+
+// YieldIDsToNames converts recipe IngredientYield IDs to their
+// respective names.
+func (rs Recipes) YieldIDsToNames() error {
+	for _, r := range rs {
+		for _, ys := range r.Yields {
+			for i, ingred := range ys.Ingredients {
+				name, err := ingredientName(ingred.ID, r.Ingredients)
+				if err != nil {
+					return err
+				}
+				ys.Ingredients[i].ID = name
+			}
+		}
+	}
+	return nil
+}
+
+func ingredientName(id string, ingreds []Ingredient) (string, error) {
+	for _, ingred := range ingreds {
+		if id == ingred.ID {
+			return ingred.Name, nil
+		}
+	}
+	return "", errors.New(fmt.Sprintf("id %s not found in ingredients list", id))
 }
