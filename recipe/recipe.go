@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/net/html"
@@ -30,6 +31,8 @@ type URL struct {
 	Priority   float64  `xml:"priority"`
 }
 
+// Collections scrapes a list of recipe collections from the Hello Fresh
+// website.
 func Collections() ([]string, error) {
 	resp, err := http.Get("https://www.hellofresh.com/sitemap_recipe_collections.xml")
 	if err != nil {
@@ -50,6 +53,21 @@ func Collections() ([]string, error) {
 		collection = append(collection, url.LOC)
 	}
 	return collection, nil
+}
+
+// IsValidPage tests whether the provided page is a valid Hello Fresh
+// recipe page.
+func IsValidPage(page string) (bool, error) {
+	cs, err := Collections()
+	if err != nil {
+		return false, err
+	}
+	for _, c := range cs {
+		if strings.HasPrefix(page, c) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 type payload struct {
