@@ -6,7 +6,7 @@
 //
 // Usage:
 //
-//	hello-fresh-scrape [-o output] [-y]
+//	hello-fresh-scrape [-l list] [-o output] [-y]
 //
 // The -o flag specifies the name of a file to write instead of using standard output.
 //
@@ -25,19 +25,21 @@ import (
 )
 
 var (
+	listCollections = flag.Bool("l", false, "list available collections to scrape recipes from")
 	oFlag           = flag.String("o", "", "write output to `file` (default standard output)")
+	recipePage      = flag.String("p", "https://www.hellofresh.com/recipes", "page to scrape recipes from")
 	yieldIDsToNames = flag.Bool("y", false, "convert recipe IngredientYield IDs to names")
 	output          *bufio.Writer
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: hello-fresh-scrape [-o output] [-y]\n")
+	fmt.Fprintf(os.Stderr, "usage: hello-fresh-scrape [-l list] [-o output] [-y]\n")
 	flag.PrintDefaults()
 	os.Exit(2)
 }
 
 func main() {
-	log.SetPrefix("hello-fresh-extract: ")
+	log.SetPrefix("hello-fresh-scrape: ")
 	log.SetFlags(0)
 	flag.Usage = usage
 	flag.Parse()
@@ -50,21 +52,35 @@ func main() {
 		outfile = f
 	}
 	output = bufio.NewWriter(outfile)
-	rs, err := recipe.ScrapeRecipes()
+	var data []byte
+	cs, err := recipe.Collections()
 	if err != nil {
 		log.Fatal(err)
 	}
-	if *yieldIDsToNames {
-		err = rs.YieldIDsToNames()
+	if *listCollections {
+		for _, c := range cs {
+			data = append(data, []byte(c+"\n")...)
+		}
+	} else {
+		//for _, c := range cs {
+		//	// TODO: Find recipePage in collections.
+		//}
+		rs, err := recipe.ScrapeRecipes(*recipePage)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *yieldIDsToNames {
+			err = rs.YieldIDsToNames()
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		data, err = json.MarshalIndent(rs, "", "\t")
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	d, err := json.MarshalIndent(rs, "", "\t")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = output.Write(d)
+	_, err = output.Write(data)
 	if err != nil {
 		log.Fatalf("writing recipe output: %v", err)
 	}
