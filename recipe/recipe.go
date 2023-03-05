@@ -7,14 +7,68 @@ package recipe
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/net/html"
 )
+
+type URLSet struct {
+	XMLName xml.Name `xml:"urlset"`
+	URLs    []URL    `xml:"url"`
+}
+
+type URL struct {
+	XMLName    xml.Name `xml:"url"`
+	LOC        string   `xml:"loc"`
+	LastMod    string   `xml:"lastmod"`
+	ChangeFreq string   `xml:"changefreq"`
+	Priority   float64  `xml:"priority"`
+}
+
+// Collections scrapes a list of recipe collections from the Hello Fresh
+// website.
+func Collections() ([]string, error) {
+	resp, err := http.Get("https://www.hellofresh.com/sitemap_recipe_collections.xml")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var urlset URLSet
+	err = xml.Unmarshal(b, &urlset)
+	if err != nil {
+		return nil, err
+	}
+	var collection []string
+	for _, url := range urlset.URLs {
+		collection = append(collection, url.LOC)
+	}
+	return collection, nil
+}
+
+// IsValidPage tests whether the provided page is a valid Hello Fresh
+// recipe page.
+func IsValidPage(page string) (bool, error) {
+	cs, err := Collections()
+	if err != nil {
+		return false, err
+	}
+	for _, c := range cs {
+		if strings.HasPrefix(page, c) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 type payload struct {
 	Props struct {
@@ -177,8 +231,8 @@ type IngredientYield struct {
 
 // ScrapeRecipes scrapes recipes from the JSON payload on the
 // Hello Fresh website.
-func ScrapeRecipes() (Recipes, error) {
-	resp, err := http.Get("https://www.hellofresh.com/recipes")
+func ScrapeRecipes(page string) (Recipes, error) {
+	resp, err := http.Get(page)
 	if err != nil {
 		return nil, err
 	}
